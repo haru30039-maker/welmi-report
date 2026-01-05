@@ -1,0 +1,5 @@
+{
+  "name": "Smart Daily Report (Nippo) Pro",
+  "description": "A professional daily report management system featuring automated formatting, AI insights, and external integration capabilities for Google Sheets and Email via webhooks.",
+  "requestFramePermissions": []
+}
