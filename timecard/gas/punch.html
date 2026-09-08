@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('styles'); ?>
+</head>
+<body>
+  <div id="waitingScreen" class="screen">
+    <div class="clock-time" id="clockTime">--:--</div>
+    <div class="clock-date" id="clockDate">----年--月--日</div>
+    <div class="waiting-message" id="waitingMessage">カードをかざしてください</div>
+    <div id="deviceWarning" class="result-warning" style="display:none;">
+      この端末では打刻できません。管理者にお伝えください。
+    </div>
+  </div>
+
+  <div id="nameButtons" class="name-buttons" style="display:none;"></div>
+
+  <div id="confirmScreen" class="screen" style="display:none;">
+    <div class="result-name" id="confirmName"></div>
+    <button class="big-button" id="confirmButton"></button>
+    <button class="big-button" id="cancelButton" style="background:#999;">もどる</button>
+  </div>
+
+  <div id="resultScreen" class="screen" style="display:none;">
+    <div class="result-name" id="resultName"></div>
+    <div class="result-greeting" id="resultGreeting"></div>
+    <div class="result-status" id="resultStatus"></div>
+    <div class="result-warning" id="resultWarning" style="display:none;"></div>
+  </div>
+
+  <input type="text" id="scanInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+    style="position:absolute; top:-100px; left:-100px; opacity:0; width:1px; height:1px;">
+
+  <script>
+    var DEVICE_TOKEN_KEY = 'welmi_device_token';
+    var OFFLINE_QUEUE_KEY = 'welmi_offline_queue';
+    var deviceToken = '';
+    try { deviceToken = localStorage.getItem(DEVICE_TOKEN_KEY) || ''; } catch (e) { /* ignore */ }
+    var pendingStaffId = null;
+
+    function showScreen(id) {
+      ['waitingScreen', 'confirmScreen', 'resultScreen'].forEach(function (s) {
+        document.getElementById(s).style.display = (s === id) ? 'flex' : 'none';
+      });
+    }
+
+    // ---- 時計 ----
+    function updateClock() {
+      var now = new Date();
+      var h = ('0' + now.getHours()).slice(-2);
+      var m = ('0' + now.getMinutes()).slice(-2);
+      document.getElementById('clockTime').textContent = h + ':' + m;
+      var days = ['日', '月', '火', '水', '木', '金', '土'];
+      document.getElementById('clockDate').textContent =
+        now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日（' + days[now.getDay()] + '）';
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ---- スキャナ入力（Bluetooth HID がキーボードとして文字+Enterを送ってくる） ----
+    var scanInput = document.getElementById('scanInput');
+    function focusScanInput() {
+      scanInput.value = '';
+      scanInput.focus();
+    }
+    focusScanInput();
+    setInterval(focusScanInput, 1500); // 何かの拍子にフォーカスが外れても戻す
+
+    scanInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        var token = scanInput.value.trim();
+        scanInput.value = '';
+        if (token) handleQrScan(token);
+      }
+    });
+
+    // ---- 音・読み上げ ----
+    function playBeep() {
+      try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } catch (e) { /* 音が出なくても打刻は成立させる */ }
+    }
+
+    function speak(text) {
+      try {
+        var utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ja-JP';
+        window.speechSynthesis.speak(utter);
+      } catch (e) { /* 読み上げ失敗は無視 */ }
+    }
+
+    function speechForResult(result) {
+      var parts = result.time.split(':');
+      var hour = parseInt(parts[0], 10);
+      var minute = parseInt(parts[1], 10);
+      var timeText = minute === 0 ? (hour + '時') : (hour + '時' + minute + '分');
+      return result.name + 'さん、' + result.type + '、' + timeText;
+    }
+
+    // ---- 結果表示 ----
+    function showResult(result) {
+      document.getElementById('resultName').textContent = result.name + ' さん';
+      document.getElementById('resultGreeting').textContent = result.greeting;
+      var statusEl = document.getElementById('resultStatus');
+      statusEl.textContent = '✅ ' + result.type + ' ' + result.time + ' 打刻しました';
+      statusEl.className = 'result-status ' + (result.type === '出勤' ? 'in' : 'out');
+      var warnEl = document.getElementById('resultWarning');
+      if (result.warning) {
+        warnEl.textContent = result.warning;
+        warnEl.style.display = 'block';
+      } else {
+        warnEl.style.display = 'none';
+      }
+      showScreen('resultScreen');
+      playBeep();
+      speak(speechForResult(result));
+      setTimeout(function () {
+        showScreen('waitingScreen');
+        focusScanInput();
+      }, result.warning ? 10000 : 5000);
+    }
+
+    function showMessage(message, isDuplicate) {
+      document.getElementById('resultName').textContent = '';
+      document.getElementById('resultGreeting').textContent = '';
+      var statusEl = document.getElementById('resultStatus');
+      statusEl.textContent = message;
+      statusEl.className = 'result-status ' + (isDuplicate ? 'duplicate' : 'error');
+      document.getElementById('resultWarning').style.display = 'none';
+      showScreen('resultScreen');
+      if (!isDuplicate) playBeep();
+      setTimeout(function () {
+        showScreen('waitingScreen');
+        focusScanInput();
+      }, 5000);
+    }
+
+    // ---- オフラインキュー ----
+    function loadQueue() {
+      try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    function saveQueue(q) {
+      try { localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q)); } catch (e) { /* ignore */ }
+    }
+    function enqueue(item) {
+      var q = loadQueue();
+      item.queuedAt = new Date().toISOString();
+      q.push(item);
+      saveQueue(q);
+    }
+    function flushQueue() {
+      var q = loadQueue();
+      if (q.length === 0) return;
+      var remaining = [];
+      var i = 0;
+      function next() {
+        if (i >= q.length) { saveQueue(remaining); return; }
+        var item = q[i++];
+        var call = google.script.run
+          .withSuccessHandler(function () { next(); })
+          .withFailureHandler(function () { remaining.push(item); next(); });
+        if (item.method === 'punchWithQr') {
+          call.punchWithQr(deviceToken, item.value);
+        } else {
+          call.punchWithStaffId(deviceToken, item.value);
+        }
+      }
+      next();
+    }
+    setInterval(flushQueue, 30000);
+
+    // ---- QRスキャン処理 ----
+    function handleQrScan(token) {
+      google.script.run
+        .withSuccessHandler(onPunchResult)
+        .withFailureHandler(function () {
+          enqueue({ method: 'punchWithQr', value: token });
+          showMessage('打刻しました（送信待ち）', true);
+        })
+        .punchWithQr(deviceToken, token);
+    }
+
+    function onPunchResult(result) {
+      if (result.ok) {
+        showResult(result);
+      } else {
+        showMessage(result.message, !!result.duplicate);
+      }
+    }
+
+    // ---- 名前ボタン方式 ----
+    function loadWaitingConfig() {
+      google.script.run
+        .withSuccessHandler(function (config) {
+          if (!config.valid) {
+            document.getElementById('deviceWarning').style.display = 'block';
+          }
+          if (config.nameButtonEnabled && config.staffList.length > 0) {
+            renderNameButtons(config.staffList);
+          }
+        })
+        .withFailureHandler(function () { /* オフライン時は名前ボタンなしで続行 */ })
+        .getWaitingScreenConfig(deviceToken);
+    }
+
+    function renderNameButtons(staffList) {
+      var container = document.getElementById('nameButtons');
+      container.innerHTML = '';
+      staffList.forEach(function (s) {
+        var btn = document.createElement('button');
+        btn.className = 'name-button';
+        btn.textContent = s.name;
+        btn.onclick = function () { onNameButtonTap(s.id); };
+        container.appendChild(btn);
+      });
+      container.style.display = 'flex';
+    }
+
+    function onNameButtonTap(staffId) {
+      pendingStaffId = staffId;
+      google.script.run
+        .withSuccessHandler(function (status) {
+          if (!status.ok) { showMessage(status.message, false); return; }
+          document.getElementById('confirmName').textContent = status.name + ' さん';
+          var btn = document.getElementById('confirmButton');
+          btn.textContent = status.nextAction;
+          btn.style.background = status.nextAction === '出勤' ? '#1a73e8' : '#f4511e';
+          showScreen('confirmScreen');
+        })
+        .withFailureHandler(function () { showMessage('通信できません。もう一度お試しください', false); })
+        .getStaffPunchStatus(deviceToken, staffId);
+    }
+
+    document.getElementById('confirmButton').addEventListener('click', function () {
+      google.script.run
+        .withSuccessHandler(onPunchResult)
+        .withFailureHandler(function () {
+          enqueue({ method: 'punchWithStaffId', value: pendingStaffId });
+          showMessage('打刻しました（送信待ち）', true);
+        })
+        .punchWithStaffId(deviceToken, pendingStaffId);
+    });
+
+    document.getElementById('cancelButton').addEventListener('click', function () {
+      showScreen('waitingScreen');
+      focusScanInput();
+    });
+
+    loadWaitingConfig();
+    showScreen('waitingScreen');
+  </script>
+</body>
+</html>

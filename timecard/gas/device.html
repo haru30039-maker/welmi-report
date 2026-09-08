@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('styles'); ?>
+</head>
+<body>
+  <div class="screen">
+    <div id="setupSection" style="display:none;">
+      <h2>はじめての設定</h2>
+      <p>管理者パスワードをまだ設定していません。最初にここで設定してください。</p>
+      <div class="form-block">
+        <label>管理者パスワード（4文字以上）</label>
+        <input type="password" id="newPassword">
+      </div>
+      <button class="big-button" onclick="submitInitialPassword()">設定する</button>
+      <div id="setupMessage" style="margin-top:16px; color:#c0392b;"></div>
+    </div>
+
+    <div id="registerSection" style="display:none;">
+      <h2>この端末を登録します</h2>
+      <div class="form-block">
+        <label>端末の名前（例：フロントiPad）</label>
+        <input type="text" id="deviceName" value="iPad">
+      </div>
+      <div class="form-block">
+        <label>管理者パスワード</label>
+        <input type="password" id="devicePassword">
+      </div>
+      <button class="big-button" onclick="submitRegister()">この端末を登録する</button>
+      <div id="registerMessage" style="margin-top:16px; color:#c0392b;"></div>
+    </div>
+
+    <div id="doneSection" style="display:none;">
+      <h2>登録が完了しました</h2>
+      <p>この端末で打刻できるようになりました。</p>
+      <button class="big-button" onclick="location.href='?'">打刻画面へ戻る</button>
+    </div>
+  </div>
+
+  <script>
+    function init() {
+      google.script.run
+        .withSuccessHandler(function (isSet) {
+          if (isSet) {
+            document.getElementById('registerSection').style.display = 'block';
+          } else {
+            document.getElementById('setupSection').style.display = 'block';
+          }
+        })
+        .isAdminPasswordSet();
+    }
+
+    function submitInitialPassword() {
+      var pw = document.getElementById('newPassword').value;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res.ok) {
+            document.getElementById('setupSection').style.display = 'none';
+            document.getElementById('registerSection').style.display = 'block';
+          } else {
+            document.getElementById('setupMessage').textContent = res.message;
+          }
+        })
+        .setInitialAdminPassword(pw);
+    }
+
+    function submitRegister() {
+      var name = document.getElementById('deviceName').value;
+      var pw = document.getElementById('devicePassword').value;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res.ok) {
+            try { localStorage.setItem('welmi_device_token', res.deviceToken); } catch (e) { /* ignore */ }
+            document.getElementById('registerSection').style.display = 'none';
+            document.getElementById('doneSection').style.display = 'block';
+          } else {
+            document.getElementById('registerMessage').textContent = res.message;
+          }
+        })
+        .registerDevice(pw, name);
+    }
+
+    init();
+  </script>
+</body>
+</html>

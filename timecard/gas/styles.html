@@ -1,0 +1,114 @@
+<style>
+  :root {
+    --color-bg: #f5f7fa;
+    --color-in: #1a73e8;
+    --color-out: #f4511e;
+    --color-error: #d32f2f;
+    --color-muted-bg: #757575;
+    --color-text: #1a1a1a;
+    --color-muted: #666;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ---- 打刻・端末登録画面（iPad 前提の大きな文字） ---- */
+  .screen {
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+  }
+  .clock-time { font-size: 15vw; font-weight: 700; line-height: 1; }
+  .clock-date { font-size: 5vw; color: var(--color-muted); margin-top: 12px; }
+  .waiting-message { font-size: 6vw; margin-top: 40px; color: var(--color-muted); }
+  .result-name { font-size: 10vw; font-weight: 700; margin-bottom: 16px; }
+  .result-greeting { font-size: 6vw; margin-bottom: 24px; }
+  .result-status {
+    font-size: 9vw;
+    font-weight: 700;
+    padding: 24px 48px;
+    border-radius: 24px;
+    color: white;
+    max-width: 90vw;
+  }
+  .result-status.in { background: var(--color-in); }
+  .result-status.out { background: var(--color-out); }
+  .result-status.error { background: var(--color-error); }
+  .result-status.duplicate { background: var(--color-muted-bg); }
+  .result-warning {
+    margin-top: 24px;
+    font-size: 4vw;
+    color: var(--color-error);
+    background: #fff3f0;
+    padding: 16px 24px;
+    border-radius: 16px;
+  }
+  .name-buttons {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    justify-content: center;
+    background: rgba(255,255,255,0.92);
+    border-top: 2px solid #ddd;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  .name-button {
+    font-size: 4vw;
+    padding: 20px 28px;
+    border-radius: 16px;
+    background: white;
+    border: 3px solid #ccc;
+    min-width: 140px;
+  }
+  .big-button {
+    font-size: 6vw;
+    padding: 32px 64px;
+    border-radius: 24px;
+    border: none;
+    color: white;
+    background: var(--color-in);
+    margin-top: 32px;
+    display: block;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  /* ---- フォーム類（端末登録・管理画面） ---- */
+  input[type=text], input[type=password], input[type=date] {
+    font-size: 18px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 2px solid #ccc;
+    width: 100%;
+    max-width: 480px;
+  }
+  .form-block { margin: 16px 0; text-align: left; width: 100%; max-width: 480px; }
+  label { font-size: 14px; color: var(--color-muted); display: block; margin-bottom: 6px; }
+
+  /* ---- 管理画面（通常フォントサイズ） ---- */
+  .admin-section { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; font-size: 14px; text-align: left; }
+  th { background: #fafafa; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; }
+  .pill.active { background: #e6f4ea; color: #1e7e34; }
+  .pill.inactive { background: #fdecea; color: #c0392b; }
+</style>
